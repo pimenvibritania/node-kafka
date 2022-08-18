@@ -1,0 +1,79 @@
+version: '3.8'
+services:
+  postgresql:
+    image: postgres:11.3
+    container_name: postgresql
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "5432:5432"
+    environment:
+      - PGHOST=localhost
+      - PGDATABASE=postgres
+      - PGUSER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - db-postgres:/var/lib/postgresql/data
+  zk:
+    container_name: zookeeper
+    image: confluentinc/cp-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+  kafka:
+    container_name: kafka
+    image: confluentinc/cp-kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zk
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_ZOOKEEPER_CONNECT: zk:2181
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  db-mongo:
+    image: mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    container_name: mongo
+    environment:
+      MONGO_INITDB_DATABASE: db
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+    volumes:
+      - mongo:/data/db
+  producers:
+    container_name: producers
+    build: producers
+    ports:
+      - 8881:8080
+    volumes:
+      - ./producers:/app
+    environment:
+      - PORT=8080
+      - POSTGRES_URL=postgres://postgres:postgres@postgresql:5432/postgres
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=topic1
+    depends_on:
+      - kafka
+      - postgresql
+  subscribers:
+    container_name: subscribers
+    build: subscribers
+    ports:
+      - 8882:8080
+    volumes:
+      - ./subscribers:/app
+    environment:
+      - PORT=8080
+      - MONGO_URL=mongodb://root:root@db-mongo:27017/subscribers?authSource=admin
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=topic1
+    depends_on:
+      - kafka
+      - postgresql
+volumes:
+  db-postgres:
+  mongo:
